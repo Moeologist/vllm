@@ -248,6 +248,22 @@ class PPHandler:
             return
 
         assert sampled_token_ids.dtype == torch.int64
+        # The receiver always posts a [num_reqs, max_sample_len] buffer, but under
+        # spec decode the sampler emits width 1 on any step with no draft tokens
+        # (prefill, first decode) and width (num_spec+1) only once rejection
+        # sampling has run. Pad to max_sample_len so the NCCL broadcast element
+        # count matches the receiver on EVERY step (an unpadded width-1 send vs a
+        # width-(num_spec+1) recv is a count mismatch that deadlocks the receiver).
+        # Trailing -1 columns are placeholders ignored by post_update, which
+        # advances each request by its per-request num_sampled valid count.
+        width = sampled_token_ids.shape[-1]
+        if width != self.max_sample_len:
+            assert width < self.max_sample_len
+            padded = sampled_token_ids.new_full(
+                (sampled_token_ids.shape[0], self.max_sample_len), -1
+            )
+            padded[:, :width] = sampled_token_ids
+            sampled_token_ids = padded
 
         if current_platform.is_xpu():
             self.main_stream.synchronize()
