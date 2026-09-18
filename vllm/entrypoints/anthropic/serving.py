@@ -138,16 +138,32 @@ class AnthropicServingMessages(OpenAIServingChat):
             "length": "max_tokens",
             "tool_calls": "tool_use",
         }
-        self._merge_inline_system = self._detect_merge_inline_system(chat_template)
+        self._merge_inline_system = self._detect_merge_inline_system(
+            chat_template,
+            supports_inline_system=self._renderer_supports_inline_system(self.renderer),
+        )
 
     @staticmethod
-    def _detect_merge_inline_system(chat_template: str | None) -> bool:
+    def _renderer_supports_inline_system(renderer: Any) -> bool:
+        """Return whether a renderer preserves inline system messages."""
+        from vllm.renderers.deepseek_v4 import DeepseekV4Renderer
+        from vllm.renderers.deepseek_v32 import DeepseekV32Renderer
+
+        return isinstance(renderer, (DeepseekV32Renderer, DeepseekV4Renderer))
+
+    @staticmethod
+    def _detect_merge_inline_system(
+        chat_template: str | None, *, supports_inline_system: bool = False
+    ) -> bool:
         """Auto-detect whether the chat template requires system-first ordering.
 
         Renders a [system, user, system, user] conversation against the
         template; if it raises (e.g. Qwen's ``loop.first`` guard), the
         model needs inline system messages merged into the leading block.
         """
+        # Native renderers can support inline system messages without Jinja.
+        if supports_inline_system:
+            return False
         if not chat_template:
             return True
         try:

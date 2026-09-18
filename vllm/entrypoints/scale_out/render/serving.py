@@ -58,7 +58,12 @@ class ServingRender(BaseServing):
 
         self._merge_inline_system = (
             AnthropicServingMessages._detect_merge_inline_system(
-                online_renderer.chat_template
+                online_renderer.chat_template,
+                supports_inline_system=(
+                    AnthropicServingMessages._renderer_supports_inline_system(
+                        online_renderer.renderer
+                    )
+                ),
             )
         )
 

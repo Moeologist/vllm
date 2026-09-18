@@ -307,6 +307,17 @@ class KVCacheManager:
             num_new_computed_tokens + num_uncached if num_uncached else 0
         )
 
+        logger.info(
+            "computed-blocks req=%s prompt_len=%d hit_len=%d ratio=%.3f "
+            "uncached=%d kv=%.2f",
+            request.request_id,
+            request.num_tokens,
+            num_new_computed_tokens,
+            num_new_computed_tokens / max(request.num_tokens, 1),
+            num_uncached,
+            self.usage * 100.0,
+        )
+
         blocks = self.create_kv_cache_blocks(computed_blocks)
         return blocks, num_new_computed_tokens, shared_prefix_boundary
 

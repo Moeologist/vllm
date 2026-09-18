@@ -1413,6 +1413,40 @@ class TestDetectMergeInlineSystem:
         """No chat_template → conservative default: merge."""
         assert AnthropicServingMessages._detect_merge_inline_system(None) is True
 
+    def test_native_inline_system_preserves_incremental_prefix(self):
+        """A new inline system message must not rewrite the leading prompt."""
+        from vllm.tokenizers.deepseek_v4_encoding import encode_messages
+
+        messages = [
+            {"role": "user", "content": "Hello"},
+            {"role": "system", "content": "Budget: 100"},
+        ]
+        merge = AnthropicServingMessages._detect_merge_inline_system(
+            None, supports_inline_system=True
+        )
+        first = _convert(_make_request(messages), merge_inline_system=merge)
+        second = _convert(
+            _make_request(
+                messages
+                + [
+                    {"role": "assistant", "content": "Hi"},
+                    {"role": "user", "content": "Continue"},
+                    {"role": "system", "content": "Budget: 90"},
+                ]
+            ),
+            merge_inline_system=merge,
+        )
+        first_prompt = encode_messages(first.messages, thinking_mode="chat")
+        second_prompt = encode_messages(second.messages, thinking_mode="chat")
+        assert second_prompt.startswith(first_prompt)
+
+    def test_deepseek_v32_renderer_supports_inline_system(self):
+        from vllm.renderers.deepseek_v32 import DeepseekV32Renderer
+
+        assert AnthropicServingMessages._renderer_supports_inline_system(
+            object.__new__(DeepseekV32Renderer)
+        )
+
 
 # ======================================================================
 # Full (non-streaming) response conversion: messages_full_converter

@@ -180,6 +180,23 @@ def test_schedule(enable_prefix_caching: bool, prompt_logprobs: int | None):
         assert scheduler.running[i] == request
 
 
+def test_waiting_admission_is_deferred_after_request_finishes():
+    scheduler = create_scheduler()
+    request = create_requests(num_requests=1)[0]
+    scheduler.add_request(request)
+    scheduler.finished_req_ids.add("finished")
+
+    output = scheduler.schedule()
+
+    assert output.num_scheduled_tokens == {}
+    assert request.status == RequestStatus.WAITING
+    assert scheduler.finished_req_ids == set()
+
+    output = scheduler.schedule()
+    assert request.request_id in output.num_scheduled_tokens
+    assert request.status == RequestStatus.RUNNING
+
+
 def test_scheduler_stats_route_to_existing_output_client():
     scheduler = create_scheduler()
     request = create_requests(num_requests=1)[0]

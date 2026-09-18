@@ -604,6 +604,13 @@ class Scheduler(SchedulerInterface):
 
         self.kv_cache_manager.new_step_starts()
 
+        # A request can finish in update_from_output immediately before this
+        # scheduling pass.  Its final KV writes may still be in flight when
+        # the cache table is consulted.  Do not admit a waiting request in the
+        # same pass: otherwise a short, transient prefix hit becomes its
+        # fixed num_computed_tokens and the request re-prefills the rest.
+        defer_waiting_admission = bool(self.finished_req_ids)
+
         # DP prefill balancing: on a throttled (non-cadence-aligned) step, defer
         # all prefill compute unless saturated.
         defer_prefills = (
@@ -846,7 +853,11 @@ class Scheduler(SchedulerInterface):
             assert len(scheduled_loras) <= self.lora_config.max_loras
 
         # Next, schedule the WAITING requests.
-        if not preempted_reqs and self._pause_state == PauseState.UNPAUSED:
+        if (
+            not preempted_reqs
+            and self._pause_state == PauseState.UNPAUSED
+            and not defer_waiting_admission
+        ):
             step_skipped_waiting = create_request_queue(self.policy)
 
             while (self.waiting or self.skipped_waiting) and token_budget > 0:
