@@ -138,10 +138,44 @@ class AnthropicServingMessages(OpenAIServingChat):
             "length": "max_tokens",
             "tool_calls": "tool_use",
         }
+        chat_template = self._resolve_renderer_chat_template(
+            chat_template, online_renderer.renderer
+        )
         self._merge_inline_system = self._detect_merge_inline_system(
             chat_template,
             supports_inline_system=self._renderer_supports_inline_system(self.renderer),
         )
+
+    @staticmethod
+    def _resolve_renderer_chat_template(
+        chat_template: str | None, renderer: Any
+    ) -> str | None:
+        """Resolve the template used by the renderer when no override is set."""
+        if chat_template is not None:
+            return chat_template
+
+        get_tokenizer = getattr(renderer, "get_tokenizer", None)
+        if get_tokenizer is None:
+            return None
+        try:
+            tokenizer = get_tokenizer()
+        except (AttributeError, ValueError):
+            return None
+
+        default_template = getattr(tokenizer, "chat_template", None)
+        if isinstance(default_template, str):
+            return default_template
+        if isinstance(default_template, dict):
+            get_chat_template = getattr(tokenizer, "get_chat_template", None)
+            if get_chat_template is None:
+                return None
+            try:
+                resolved = get_chat_template()
+            except (KeyError, TypeError, ValueError):
+                return None
+            if isinstance(resolved, str):
+                return resolved
+        return None
 
     @staticmethod
     def _renderer_supports_inline_system(renderer: Any) -> bool:

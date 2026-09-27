@@ -1447,6 +1447,50 @@ class TestDetectMergeInlineSystem:
             object.__new__(DeepseekV32Renderer)
         )
 
+    def test_default_renderer_template_is_used(self):
+        """Use the tokenizer template when no CLI override was supplied."""
+        template = (
+            "{%- for message in messages %}"
+            "{{- message.role }}: {{ message.content }}\n"
+            "{%- endfor %}"
+        )
+
+        class Renderer:
+            def get_tokenizer(self):
+                return type("Tokenizer", (), {"chat_template": template})()
+
+        assert (
+            AnthropicServingMessages._resolve_renderer_chat_template(None, Renderer())
+            == template
+        )
+
+    def test_default_template_dict_is_resolved(self):
+        template = "{{ messages[0].role }}"
+
+        class Tokenizer:
+            chat_template = {"default": template}
+
+            def get_chat_template(self):
+                return template
+
+        class Renderer:
+            def get_tokenizer(self):
+                return Tokenizer()
+
+        assert (
+            AnthropicServingMessages._resolve_renderer_chat_template(None, Renderer())
+            == template
+        )
+
+    def test_missing_tokenizer_keeps_conservative_default(self):
+        class Renderer:
+            pass
+
+        assert (
+            AnthropicServingMessages._resolve_renderer_chat_template(None, Renderer())
+            is None
+        )
+
 
 # ======================================================================
 # Full (non-streaming) response conversion: messages_full_converter
