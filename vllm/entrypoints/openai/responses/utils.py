@@ -339,6 +339,11 @@ def _construct_message_from_response_item(
     if isinstance(item, dict) and "role" in item:
         return item  # type: ignore[return-value]
     item_type = item.get("type") if isinstance(item, dict) else item.type
+    if item_type == "additional_tools":
+        # Codex-specific item carrying extra tools for a spawned subagent; the
+        # chat-completions path has nowhere to put them, so drop it.
+        logger.warning("Dropping unsupported Codex input item: %s", item)
+        return None
     raise VLLMValidationError(
         f"Unsupported input item type: {item_type}",
         parameter="input",
